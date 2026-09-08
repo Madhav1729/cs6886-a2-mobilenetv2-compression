@@ -1,124 +1,102 @@
 \documentclass[11pt,a4paper]{article}
+
 \usepackage[margin=1in]{geometry}
 \usepackage{booktabs}
 \usepackage{graphicx}
 \usepackage{amsmath}
 \usepackage{xcolor}
 \usepackage{hyperref}
-\hypersetup{colorlinks=true, urlcolor=blue!60!black, linkcolor=black}
 
-\title{\textbf{CS6886 -- Assignment 2}\\[2mm]
+\hypersetup{
+    colorlinks=true,
+    urlcolor=blue!60!black,
+    linkcolor=black
 }
-\author{Madhav Bhardwaj \\ \texttt{CS23B035}}
+
+\title{\textbf{CS6886 -- Assignment 2: MobileNet-v2 Compression}\\[2mm]}
+\author{Madhav Bhardwaj \quad \texttt{CS23B035}}
 \date{\today}
 
 \begin{document}
+
 \maketitle
 
 \noindent
-\textbf{Repository:} \url{https://github.com/Madhav1729/cs6886-a2-mobilenetv2-compression} \\
-\textbf{W\&B:} \url{https://wandb.ai/cs23b035-iit-madras/cs6886-a2-mobilenetv2}
+\textbf{Repository:}
+\url{https://github.com/Madhav1729/cs6886-a2-mobilenetv2-compression} \\
+
+\textbf{W\&B Dashboard:}
+\url{https://wandb.ai/cs23b035-iit-madras/cs6886-a2-mobilenetv2}
 
 \vspace{4mm}
 
 %======================================================================
-\section{Training Baseline}
+
+\section{Baseline Training}
+
 %======================================================================
 
-\subsection{Data pipeline}
+\subsection{Data Pipeline}
 
-I used CIFAR-10 with its standard split of 50{,}000 training and 10{,}000 test
-images. Table~\ref{tab:transforms} lists the transforms.
+We used the CIFAR-10 dataset, which has 50,000 training images and 10,000 test images. Table~\ref{tab:transforms} shows how we prepare the images.
 
 \begin{table}[ht]
 \centering
 \begin{tabular}{@{}lll@{}}
 \toprule
-& \textbf{Train} & \textbf{Test} \\
+\textbf{Step} & \textbf{Train} & \textbf{Test} \\
 \midrule
 1 & \texttt{RandomCrop(32, padding=4, padding\_mode='reflect')} & --- \\
 2 & \texttt{RandomHorizontalFlip(p=0.5)} & --- \\
 3 & \texttt{Resize(160, interpolation=BICUBIC)} & \texttt{Resize(160, BICUBIC)} \\
 4 & \texttt{ToTensor()} & \texttt{ToTensor()} \\
-5 & \texttt{Normalize(ImageNet mean/std)} & \texttt{Normalize(ImageNet mean/std)} \\
+5 & \texttt{Normalize(ImageNet stats)} & \texttt{Normalize(ImageNet stats)} \\
 \bottomrule
 \end{tabular}
-\caption{Input transforms. Normalization uses ImageNet statistics,
-$\mu=(0.485,0.456,0.406)$ and $\sigma=(0.229,0.224,0.225)$.}
+\caption{Data preprocessing steps.}
 \label{tab:transforms}
 \end{table}
 
-There are two main choices. First, we normalize with ImageNet
-statistics instead of CIFAR-10's own. The backbone starts from ImageNet weights,
-and those filters were trained on inputs scaled that way, so using CIFAR's
-statistics would shift the inputs away from what the pretrained features expect.
+We made two main choices here:
 
-Second, the images are upsampled from $32\times32$ to $160\times160$.
-MobileNet-v2 reduces the spatial resolution significantly as it goes through the
-network. With a $32\times32$ input the feature maps become very small by the
-later layers -- close to $1\times1$ -- which does not leave much for the
-pretrained features to work with. Therefore resized the images to
-$160\times160$, which leaves a $5\times5$ feature map at the last stage. We
-picked 160 over the network's native 224 because in our experiments it gave
-similar accuracy for roughly half the compute per image.
+\begin{itemize}
 
-The crop and flip run at $32\times32$ and the result is upsampled afterward. This
-should be equivalent to augmenting after the resize, but it is cheaper to
-compute, and the 4-pixel pad stays in CIFAR's own pixels rather than
-interpolated ones.
+\item \textbf{ImageNet Stats:} The model starts with ImageNet weights, so we keep using ImageNet's normal numbers for color ($\mu=[0.485, 0.456, 0.406]$, $\sigma=[0.229, 0.224, 0.225]$). This stops the model from getting confused right away.
 
-\subsection{Model and training setup}
+\item \textbf{Resizing to $160\times160$:} MobileNet-v2 shrinks images a lot as they go through the layers. If we put in a normal $32\times32$ CIFAR image, the final output size becomes $1\times1$, which is too small for the model to work with. Resizing to $160\times160$ leaves a $5\times5$ size at the end. It also runs much faster than the standard $224\times224$ size, with almost the same accuracy.
 
-I used the standard torchvision MobileNet-v2 architecture. Only the
-classifier is replaced with a new linear layer for 10 classes, so the rest of
-the ImageNet weights load directly. Table~\ref{tab:config} gives the full
-configuration.
+\end{itemize}
+
+\subsection{Model }
+
+We use the standard MobileNet-v2 model but change the final layer to output 10 classes instead of 1000. Table~\ref{tab:config} shows our settings.
 
 \begin{table}[ht]
 \centering
 \begin{tabular}{@{}ll@{}}
 \toprule
-\textbf{Setting} & \textbf{Value} \\
+\textbf{Parameter} & \textbf{Value} \\
 \midrule
-Architecture        & \texttt{torchvision.models.mobilenet\_v2} (unmodified) \\
-Width multiplier    & $1.0$ \\
-Dropout             & $0.2$ (stock, before the classifier) \\
-BatchNorm           & stock: momentum $0.1$, $\varepsilon=10^{-5}$, affine \\
-Initialisation      & \texttt{MobileNet\_V2\_Weights.IMAGENET1K\_V1} \\
-Classifier          & \texttt{Linear(1280, 10)}, weights $\mathcal{N}(0, 0.01)$, zero bias \\
-Parameters          & $2{,}236{,}682$ ($8.53$~MB in FP32) \\
-\midrule
-Optimizer           & SGD, momentum $0.9$, Nesterov \\
-Learning rate       & $0.01$ backbone, $0.1$ classifier \\
-Schedule            & 1 epoch linear warmup, then cosine decay to zero \\
-Weight decay        & $4\times10^{-5}$, not applied to BatchNorm parameters or biases \\
-Loss                & cross-entropy, label smoothing $0.1$ \\
-Epochs              & $20$ \\
-Batch size          & $128$ \\
-Precision           & mixed precision for training, FP32 for evaluation \\
-Seed                & $42$ \\
+Architecture & Standard \texttt{torchvision.models.mobilenet\_v2} ($2{,}236{,}682$ params, $8.53$~MB) \\
+Pretraining & ImageNet-1K (v1) \\
+Classifier Head & \texttt{Linear(1280, 10)}, starting near zero \\
+Optimizer & SGD (momentum $0.9$, Nesterov on) \\
+Learning Rate & $0.01$ (main model), $0.1$ (final layer) \\
+LR Schedule & 1 epoch warmup, then slowly drop to zero \\
+Weight Decay & $4\times10^{-5}$ (except for biases and BatchNorm) \\
+Loss Function & Cross-entropy with $0.1$ label smoothing \\
+Epochs / Batch Size & $20$ epochs, batch size $128$ \\
 \bottomrule
 \end{tabular}
-\caption{Model configuration and training strategy.}
+\caption{Baseline training settings.}
 \label{tab:config}
 \end{table}
 
-The classifier is given ten times the backbone learning rate, since it starts
-from random weights while the backbone is already trained and should not need
-to move as much. We also use a one-epoch linear warmup to make the start of
-training more stable. Reasoning is that with the classifier randomly
-initialised, using the full learning rate immediately could produce large,
-noisy updates that affect the pretrained backbone before the classifier has
-settled down and warmup avoids this.
+The final layer learns 10 times faster than the rest of the model because it starts from scratch, while the rest of the model already knows how to see images. We also use a one-epoch warmup to keep the training stable at the start.
 
-Weight decay is applied only to tensors with more than one dimension, which
-excludes BatchNorm parameters and all biases. 
+\subsection{Baseline Results \& Errors}
 
-\subsection{Results}
-
-The model reaches \textbf{96.34\%} top-1 on the test set
-(Table~\ref{tab:baseline}), and Figure~\ref{fig:curves} shows the loss and
-accuracy curves.
+The model gets \textbf{96.34\%} accuracy on the test set (Table~\ref{tab:baseline}, Figure~\ref{fig:curves}).
 
 \begin{table}[ht]
 \centering
@@ -126,252 +104,88 @@ accuracy curves.
 \toprule
 \textbf{Metric} & \textbf{Value} \\
 \midrule
-Final-epoch test top-1 (reported) & $\mathbf{96.34\%}$ \\
-Best-epoch test top-1 (epoch 12)  & $96.40\%$ \\
-Final-epoch train top-1           & $99.81\%$ \\
-Final-epoch test loss             & $0.5916$ \\
+Final Test Accuracy & \textbf{96.34\%} \\
+Best Test Accuracy (epoch 12) & 96.40\% \\
+Final Train Accuracy & 99.81\% \\
+Final Test Loss & 0.5916 \\
 \bottomrule
 \end{tabular}
-\caption{Baseline accuracy.}
+\caption{Baseline accuracy results.}
 \label{tab:baseline}
 \end{table}
 
-The last five
-epochs all fall between $96.31\%$ and $96.38\%$, so picking the best epoch would
-mean selecting a model on the test set for a difference that is within noise.
-
 \begin{figure}[ht]
 \centering
-\includegraphics[width=\textwidth]{figures/baseline_curves.png}
-\caption{Loss (left) and top-1 accuracy (right) per epoch.}
+\includegraphics[width=0.85\textwidth]{figures/baseline_curves.png}
+\caption{Training progress over 20 epochs.}
 \label{fig:curves}
 \end{figure}
 
-\subsection{Failure modes}
+The training accuracy gets very close to 100\%, but the test accuracy stops improving around epoch 12. This gap means the model is memorizing the data a bit. It shows the model is bigger than it needs to be for this simple dataset, which makes it a great choice for compression.
 
-Training accuracy ends at $99.81\%$ against $96.34\%$ on test, a gap of about
-three and a half. The test accuracy largely plateaus after around epoch
-12, while the training loss keeps decreasing. This is a sign of some
-overfitting, and it suggests the network may have more capacity than CIFAR-10
-actually needs. This was part of the motivation for exploring compression in
-Section~\ref{sec:compression}.
-
-The errors also vary considerably between classes. Table~\ref{tab:perclass} shows
-\texttt{cat} at $91.2\%$ and \texttt{dog} at $92.7\%$, both well below every
-other class. Looking at the confusion matrix, cats predicted as dogs (48 cases)
-and dogs predicted as cats (40 cases) together account for 88 of the 366 errors
-the model makes - almost a quarter of everything it gets wrong comes from this
-one pair. The next biggest source is trucks and automobiles being swapped (38
-errors), then ships called airplanes (12). These are all pairs of visually similar classes, and at CIFAR's resolution the
-image detail that would normally help tell them apart is largely lost.
+\paragraph{Where the Model Fails:} As shown in Table~\ref{tab:perclass}, the model mostly messes up on things that look alike.
 
 \begin{table}[ht]
 \centering
 \begin{tabular}{@{}lcccccccccc@{}}
 \toprule
-& airplane & automobile & bird & cat & deer & dog & frog & horse & ship & truck \\
+Class & plane & auto & bird & \textbf{cat} & deer & \textbf{dog} & frog & horse & ship & truck \\
 \midrule
-Top-1 (\%) & 97.6 & 98.4 & 95.9 & \textbf{91.2} & 96.5 & \textbf{92.7}
-           & 98.8 & 97.4 & 98.1 & 96.8 \\
+Accuracy (\%) & 97.6 & 98.4 & 95.9 & \textbf{91.2} & 96.5 & \textbf{92.7} & 98.8 & 97.4 & 98.1 & 96.8 \\
 \bottomrule
 \end{tabular}
-\caption{Per-class test accuracy.}
+\caption{Test accuracy for each class.}
 \label{tab:perclass}
 \end{table}
 
-There is also a mismatch between what MobileNet-v2 was originally designed for and the images used here. The model was designed for $224\times224$ images, while CIFAR-10 images are only $32\times32$ and are resized to $160\times160$ before being given to the model. Resizing does not add any new information to the image it only makes the image larger so that the feature maps do not become too small inside the network. This may be one reason why the model has difficulty distinguishing similar classes such as cats and dogs, since the original images do not contain much fine detail.
-
+Almost a quarter of all mistakes happen because it confuses cats and dogs (48 cats guessed as dogs, and 40 dogs guessed as cats). It also confuses trucks and cars 38 times. Since the original images are only $32\times32$, stretching them to $160\times160$ doesn't magically add lost details like fur textures. Because of this, the model has a hard time telling apart shapes that are very similar.
 
 %======================================================================
-\section{Model Compression}
+
+\section{How Model is compressed}
+
 \label{sec:compression}
+
 %======================================================================
 
-Our compression method has three stages applied in sequence: pruning, then
-quantization, then Huffman coding. All three stages operate on a single
-configuration object, and quantization is what makes the method cover both
-weights and activations -- pruning only affects weights, and Huffman coding is
-a lossless step on top of the quantized weights.
+We shrink the model in three steps: removing useless weights (pruning), using smaller numbers (quantization), and packing the data tightly (Huffman coding).
 
-\subsection{Design}
+\subsection{}
 
-\paragraph{Pruning.} We use magnitude pruning: weights below a threshold are set
-to zero. The threshold is chosen globally across all target layers rather than
-per layer, because a global threshold lets layers with genuinely small weights
-give up more than layers where every weight matters. We checked this directly:
-pruning 50\% of weights with a single global threshold left accuracy at
-$88.60\%$ before any fine-tuning, while pruning the same 50\% independently in
-each layer dropped accuracy to $19.40\%$. We also cap how much any one layer can
-lose (95\% by default), since a global threshold can otherwise wipe out a small
-layer entirely -- we saw exactly this happen to a depthwise layer at 85\% global
-sparsity.
+\paragraph{Pruning:} We remove weights that are closest to zero across the whole model at once. This works better than doing it layer by layer. To make sure no single layer gets completely destroyed, we cap the removal at 95\% per layer. We found that removing 50\% of the weights works well. If we try to remove 70\%, the model breaks and drops to 13\% accuracy.
 
-Choosing how much to prune turned out to matter more than how the pruning is
-allocated. We measured one-shot accuracy (before any fine-tuning) at several
-global sparsity levels: $50\%$ left $88.60\%$, but $70\%$ collapsed to
-$13.00\%$, and $80$--$85\%$ were both around $9$--$9.25\%$, which is close to
-random guessing on ten classes. The drop between $50\%$ and $70\%$ is not
-gradual -- the network is still mostly intact at $50\%$ and effectively broken
-at $70\%$. We use $50\%$ as our default sparsity for this reason: fine-tuning
-afterward only has to recover a moderate amount of accuracy, rather than
-rebuild a network that is close to guessing to begin with. This shows up
-clearly after fine-tuning too -- combined with 4-bit quantization, $50\%$
-sparsity reached $93.23\%$ accuracy at $10.74\times$ compression, while
-$70\%$ only reached $85.48\%$ at $14.08\times$, a much larger accuracy cost
-for a comparatively small gain in compression.
+\paragraph{Weight Quantization:} We change the main weights into simple integers (like 4-bit numbers) to save space. We test a few scaling options to find the one that causes the least error, which gives us about a 2\% boost in accuracy compared to the simplest method.
 
-\paragraph{Weight quantization.} Weights are quantized to a signed integer range
-using a symmetric scale, $q = \text{round}(w / s)$, clipped to
-$[-2^{b-1}, 2^{b-1}-1]$. The scale is computed per output channel rather than
-per tensor, since a single tensor-wide scale performs badly once channel
-magnitudes vary a lot, which they do in MobileNet-v2's depthwise layers (details
-in the next subsection). The scale itself can also be computed over groups of
-weights smaller than a full channel; we found that grouping in blocks of 128
-gives a slightly better trade-off between accuracy and the overhead of storing
-extra scales than pure per-channel scaling, though the difference is small.
+\paragraph{Activation Quantization:} We also shrink the outputs between the layers (activations) down to 8 bits. Instead of using the absolute maximum and minimum values to set our scale, we ignore the top 0.1\% of extreme values. This small change kept the accuracy at 95.85\%, whereas the basic method dropped it to 89.55\%.
 
-For picking the scale's clipping range, using the maximum absolute weight in a
-group is the simplest choice, but it is sensitive to outliers. We instead search
-over a small number of candidate clipping ratios and keep the one that
-minimises reconstruction error (an MSE-optimal scale). This gave a consistent
-accuracy improvement at low bit-widths -- about 2 points at 4-bit weights over
-using the plain maximum.
+\paragraph{Huffman Coding:} Since a lot of the weights become zero after pruning, we use Huffman coding. This is a lossless trick that gives short codes to common numbers (like zero) and longer codes to rare numbers. This saves an extra 15--35\% of space.
 
-\paragraph{Activation quantization.} Activations are quantized per tensor with
-an asymmetric scale (a scale and a zero-point), since post-ReLU6 activations are
-non-negative while the linear bottleneck outputs before the residual add are
-signed. The quantization ranges are estimated by running a few calibration
-batches from the \emph{training} set through the network and recording
-percentile-based ranges, then freezing them. Using the raw min/max instead of a
-percentile clip was noticeably worse: at 6-bit activations, min/max calibration
-gave $89.55\%$ while clipping to the 99.9th percentile gave $95.85\%$. We
-calibrate on training data specifically so the reported test accuracy is not
-influenced by statistics taken from the test set.
+\subsection{Which Layers Matter Most?}
 
-One detail that took some debugging: MobileNet-v2's inverted residual blocks
-have two places where activations are not passed through a ReLU6 -- the linear
-bottleneck projection and the residual addition. If quantizer hooks are only
-attached to ReLU6 modules, both of these are silently left in full precision,
-which would make the true activation compression ratio lower than what gets
-reported. We instead attach a quantizer to the output of every inverted
-residual block directly, in addition to every ReLU6, so both of these points
-are actually compressed.
-
-\paragraph{Huffman coding.} After quantization, the integer weight codes are not
-uniformly distributed -- most weights end up small in magnitude, so low-valued
-codes (and, once pruning is applied, the code for zero) are far more common than
-the rest. We build a Huffman code from scratch over each tensor's code
-distribution and use it as the final storage format for the quantized weights.
-This is lossless: it does not change the accuracy at all, only the storage size.
-We measured that this consistently beats the nominal bit-width by 15--35\%
-depending on how skewed the distribution is.
-
-\paragraph{Why pruning and Huffman coding combine cheaply.} Pruning usually
-requires extra storage to record which weights survived -- a bitmap costs one
-bit per original position, and at 3--4 bit weights that index alone can cost as
-much as the weights themselves. We avoid this: a pruned weight is quantized to
-code zero like any other small weight, and since Huffman coding already assigns
-short codes to frequent symbols, a high proportion of zeros just makes that
-symbol cheaper to store. No separate index or bitmap is needed, and \emph{no
-change to the size calculation was required to support pruning} -- the masks
-only decide which weights become zero before quantization runs.
-
-\subsection{Configuration}
-
-All of the above is controlled by one dataclass:
-
-\begin{table}[ht]
-\centering
-\small
-\begin{tabular}{@{}lll@{}}
-\toprule
-\textbf{Parameter} & \textbf{Stage} & \textbf{Meaning} \\
-\midrule
-\texttt{weight\_bits} & quantization & bits for the bulk (pointwise) weights \\
-\texttt{sensitive\_bits} & quantization & bits for depthwise/stem/classifier layers \\
-\texttt{activation\_bits} & quantization & bits for activation tensors \\
-\texttt{group\_size} & quantization & weights sharing one scale ($0$ = per channel) \\
-\texttt{weight\_clip} & quantization & scale selection rule (\texttt{max}, percentile, \texttt{mse}) \\
-\texttt{act\_clip} & quantization & activation calibration rule \\
-\texttt{layer\_bits} & quantization & optional per-layer bit override \\
-\texttt{sparsity} & pruning & target fraction of weights pruned \\
-\texttt{scope} & pruning & \texttt{global} or per-layer thresholding \\
-\texttt{protect} & pruning & layers excluded from pruning \\
-\texttt{max\_layer\_sparsity} & pruning & cap on any single layer's sparsity \\
-\bottomrule
-\end{tabular}
-\caption{Configuration parameters, grouped by which stage they control.}
-\label{tab:config-surface}
-\end{table}
-
-Sweeping any of these parameters and re-running the same three-stage pipeline is
-how we produce the different compression levels used in Section~\ref{sec:q3}.
-\subsection{Applying it to MobileNet-v2}
-
-MobileNet-v2 is built almost entirely from two kinds of convolution: pointwise
-(1x1) convolutions, which mix channels, and depthwise convolutions, which
-operate on each channel independently. We treat these differently, along with
-the first (full) convolution and the final classifier, since together they make
-up only about 3.5\% of all parameters but turned out to matter far more than
-their size suggests.
-
-We checked this by measuring, layer by layer, how much accuracy is lost if only
-that one layer is quantized to 3 bits while every other layer stays at full
-precision. The results were striking: the network's largest layers, which are
-all pointwise convolutions with hundreds of thousands of parameters, lost almost
-nothing individually -- some even showed a small positive change, which we take
-to be noise. In contrast, a single depthwise convolution with only 288
-parameters caused a $50.80$ point drop on its own. Table~\ref{tab:sensitivity}
-lists a few examples.
+MobileNet-v2 is mostly made of two types of layers. The "pointwise" layers hold about 96.5\% of the model's parameters. The "depthwise" layers, along with the very first and last layers, hold only about 3.5\%.
 
 \begin{table}[ht]
 \centering
 \begin{tabular}{@{}llrr@{}}
 \toprule
-\textbf{Layer} & \textbf{Kind} & \textbf{Parameters} & \textbf{Accuracy drop at 3-bit} \\
+\textbf{Layer} & \textbf{Type} & \textbf{Params} & \textbf{Acc. Drop at 3-bit} \\
 \midrule
-\texttt{features.1.conv.0.0} & depthwise & 288 & $50.80$ \\
-\texttt{features.3.conv.1.0} & depthwise & 1{,}296 & $2.10$ \\
-\texttt{features.14.conv.2} & pointwise & 92{,}160 & $2.10$ \\
-\texttt{features.17.conv.2} & pointwise & 307{,}200 & $0.25$ \\
-\texttt{features.18.0} & pointwise & 409{,}600 & $0.00$ \\
+\texttt{features.1.conv.0.0} & depthwise & 288 & $-50.80\%$ \\
+\texttt{features.3.conv.1.0} & depthwise & 1{,}296 & $-2.10\%$ \\
+\texttt{features.14.conv.2} & pointwise & 92{,}160 & $-2.10\%$ \\
+\texttt{features.17.conv.2} & pointwise & 307{,}200 & $-0.25\%$ \\
+\texttt{features.18.0} & pointwise & 409{,}600 & $0.00\%$ \\
 \bottomrule
 \end{tabular}
-\caption{Per-layer sensitivity, measured by quantizing one layer at a time to
-3 bits. Sensitivity does not track layer size -- the largest layers here are
-the least sensitive.}
+\caption{How much accuracy drops if we compress just one layer to 3 bits.}
 \label{tab:sensitivity}
 \end{table}
 
-Based on this, our default allocation is: pointwise convolutions (about 96.5\%
-of parameters) are quantized aggressively, while depthwise convolutions, the
-first convolution, and the classifier are kept at 8 bits. We use the same split
-for pruning -- only pointwise weights are pruned, and the same protected layers
-are excluded. Keeping these layers at higher precision costs very little
-storage, since they are such a small fraction of the model, but recovers a lot
-of accuracy. At 4-bit weights, quantizing everything uniformly gave $77.40\%$
-accuracy, while protecting these layers at 8 bits gave $91.80\%$ -- a 14 point
-gain for roughly 4\% more storage.
+As Table~\ref{tab:sensitivity} shows, if we squeeze a tiny depthwise layer down to 3 bits, the accuracy crashes by 50.80\%. But we can squeeze the massive pointwise layers and the accuracy barely moves. Because of this, we use a \textbf{mixed strategy}: we compress the big layers a lot (to 3 or 4 bits) and prune them. We leave the small, sensitive layers safely at 8 bits and don't prune them. This trick gave us a huge 14.4\% accuracy boost for almost no extra storage cost.
 
-One more detail affects which layers can be quantized safely: BatchNorm
-folding. Before quantizing, we fold every BatchNorm layer into the convolution
-before it, which is a standard, lossless algebraic simplification at inference
-time and removes the BatchNorm parameters from storage entirely (34{,}112
-parameters, about 133 KB). Folding multiplies each output channel by a
-different factor, though, and this widens the difference in scale between
-channels within a layer. We found this interacts badly with using a single
-scale per tensor: at 6-bit weights, per-tensor quantization dropped from
-$91.55\%$ unfolded to $57.90\%$ folded, while per-channel quantization gave
-$95.60\%$ in both cases. So per-channel (or grouped) scales are not just a minor
-accuracy improvement here -- they are what makes folding safe to do at all.
+\subsection{Storage Details}
 
-\subsection{Storage overheads}
-
-Reporting compression as simply (bits per weight) $\times$ (number of weights)
-would understate the real model size, since the scales, the folded biases, and
-the Huffman code tables also need to be stored. Table~\ref{tab:overhead} breaks
-this down for our W4/A8 configuration (4-bit pointwise weights, 8-bit protected
-layers, 8-bit activations, no pruning).
+To report the real size, we have to count everything, including the scales and biases. As Table~\ref{tab:overhead} shows, we keep our scales in 16-bit float (FP16). Trying to squeeze scales down to 8 bits caused too many errors and ruined the model.
 
 \begin{table}[ht]
 \centering
@@ -379,170 +193,97 @@ layers, 8-bit activations, no pruning).
 \toprule
 \textbf{Component} & \textbf{Size (KB)} & \textbf{Share} \\
 \midrule
-Huffman-coded weight payload & $1012.5$ & $91.4\%$ \\
-Per-channel scales (FP16)     & $33.3$   & $3.0\%$ \\
-Folded biases (FP16)          & $33.3$   & $3.0\%$ \\
-Huffman code tables           & $4.9$    & $0.4\%$ \\
+Main weights (Huffman) & 1012.5 & 91.4\% \\
+Scales (FP16) & 33.3 & 3.0\% \\
+Biases (FP16) & 33.3 & 3.0\% \\
+Huffman dictionary & 4.9 & 0.4\% \\
 \midrule
-\textbf{Total}                 & $1049.2$ & $100\%$ \\
+\textbf{Total} & \textbf{1049.2} & \textbf{100.0\%} \\
 \bottomrule
 \end{tabular}
-\caption{Storage breakdown for W4/A8, per-channel scales. Overhead beyond the
-weight payload itself is about 6.5\% of the total.}
+\caption{Size breakdown for the basic 4-bit model without pruning.}
 \label{tab:overhead}
 \end{table}
 
-We also checked whether the scales themselves could be stored more cheaply than
-FP16. This turned out to matter a lot more than we expected. A scale multiplies
-every weight in its group, so an error in the scale is not the same kind of
-error as rounding an individual weight -- it shifts a whole group of weights
-together rather than averaging out. We tested this directly: storing scales in
-FP16 gave $93.20\%$ accuracy, BF16 gave $92.95\%$, and 8-bit floating point
-(e4m3) collapsed to $55.30\%$. FP16 scales cost very little (3\% of the model
-here) and clearly should not be reduced further.
-
-
-
-
 %======================================================================
-\section{Compression Results}
+
+\section{Testing Different Settings}
+
 \label{sec:q3}
+
 %======================================================================
 
-We ran the full pipeline at many combinations of weight bit-width, activation
-bit-width, which layers get the protected higher bit-width, and pruning
-sparsity, applying post-training quantization only (no fine-tuning) so that a
-full sweep is cheap -- each configuration takes about 20 seconds to compress and
-evaluate. Table~\ref{tab:sweep} shows a representative subset of an earlier
-16-configuration run (weight bits $\times$ activation bits $\times$ sensitive
-bits, before we added pruning as a swept axis).
+Before we spent time fine-tuning, we did a quick test to see how different bits and pruning levels behaved.
 
 \begin{table}[ht]
 \centering
 \small
 \begin{tabular}{@{}cccrrr@{}}
 \toprule
-\textbf{W bits} & \textbf{A bits} & \textbf{Sensitive bits} & \textbf{Accuracy} & \textbf{Model ratio} & \textbf{Size (MB)} \\
+\textbf{Main Bits} & \textbf{Output Bits} & \textbf{Sensitive Bits} & \textbf{Accuracy} & \textbf{Space Saved} & \textbf{Size (MB)} \\
 \midrule
-8 & 8 & 8 & $96.25\%$ & $4.2\times$  & $2.018$ \\
-8 & 8 & 4 & $81.21\%$ & $4.3\times$  & $1.981$ \\
-6 & 8 & 8 & $96.04\%$ & $5.6\times$  & $1.515$ \\
-6 & 8 & 4 & $77.26\%$ & $5.8\times$  & $1.478$ \\
-4 & 8 & 8 & $93.13\%$ & $8.1\times$  & $1.049$ \\
-4 & 8 & 4 & $62.64\%$ & $8.4\times$  & $1.012$ \\
-3 & 8 & 8 & $40.47\%$ & $10.3\times$ & $0.832$ \\
-3 & 8 & 4 & $17.87\%$ & $10.7\times$ & $0.794$ \\
+8 & 8 & 8 & 96.25\% & $4.2\times$ & 2.018 \\
+8 & 8 & 4 & 81.21\% & $4.3\times$ & 1.981 \\
+6 & 8 & 8 & 96.04\% & $5.6\times$ & 1.515 \\
+6 & 8 & 4 & 77.26\% & $5.8\times$ & 1.478 \\
+4 & 8 & 8 & 93.13\% & $8.1\times$ & 1.049 \\
+4 & 8 & 4 & 62.64\% & $8.4\times$ & 1.012 \\
+3 & 8 & 8 & 40.47\% & $10.3\times$ & 0.832 \\
+3 & 8 & 4 & 17.87\% & $10.7\times$ & 0.794 \\
 \bottomrule
 \end{tabular}
-\caption{Post-training accuracy (no fine-tuning) across weight bit-width,
-activation bit-width fixed at 8, and sensitive-layer bit-width. Dropping the
-protected layers to 4 bits costs $15$--$30$ points of accuracy for less than
-$0.5\times$ extra compression -- this is the clearest evidence for keeping them
-at higher precision.}
+\caption{Quick test of different bit sizes before fine-tuning.}
 \label{tab:sweep}
 \end{table}
 
-The most important pattern here is what happens to the \emph{sensitive bits}
-column. Dropping the protected layers (depthwise, stem, classifier) from 8 to 4
-bits is damaging at every weight width, and it barely improves compression: at
-4-bit weights it costs $30$ points of accuracy for a $0.3\times$ gain in ratio.
-This is the same result described in Section~\ref{sec:compression}, shown here
-as a sweep rather than a single comparison.
-
-We then extended this sweep to also vary pruning sparsity, giving four axes in
-total: weight bits, activation bits, sensitive-layer bits, and sparsity, for
-$4\times2\times2\times2=32$ configurations. Figure~\ref{fig:parcoord} is the
-resulting Parallel Coordinates chart, with each line one configuration and its
-colour showing the resulting accuracy (dark blue is low, orange/yellow is
-high).
-
 \begin{figure}[ht]
 \centering
-\includegraphics[width=\textwidth]{figures/parallel_coordinates.png}
-\caption{Parallel Coordinates chart over the 32-configuration sweep. Left to
-right: \texttt{weight\_quant\_bits}, \texttt{activation\_quant\_bits},
-\texttt{sensitive\_bits}, \texttt{sparsity}, \texttt{compression\_ratio},
-\texttt{model\_size\_mb}, \texttt{quantized\_acc}. Colour encodes accuracy.}
+\includegraphics[width=0.95\textwidth]{figures/parallel_coordinates.png}
+\caption{Chart of our 32 test runs. You can see the lines drop down (bad accuracy) whenever we try to compress the sensitive layers to 4 bits.}
 \label{fig:parcoord}
 \end{figure}
 
-The clearest pattern in the chart is on the \texttt{sensitive\_bits} axis: every
-line that dips to $4$ there turns dark blue by the last column, meaning low
-accuracy, regardless of what the other three axes are doing. This matches
-Table~\ref{tab:sweep} and the layer-by-layer results in
-Section~\ref{sec:compression} -- protecting the depthwise, stem, and classifier
-layers matters more than any other single choice in the sweep. Sparsity shows a
-milder version of the same pattern: lines with \texttt{sparsity}$=0.5$ trend
-toward higher compression ratios but do not by themselves cause the sharp
-colour change that dropping \texttt{sensitive\_bits} does. The orange, high
-accuracy lines all pass through \texttt{weight\_quant\_bits}$=8$ or $6$ with
-\texttt{sensitive\_bits}$=8$ and low sparsity, consistent with the rest of our
-results. All of the numbers in this section are post-training only, with no
-fine-tuning; fine-tuning recovers most of the accuracy lost at low bit-widths,
-which is what Section~\ref{sec:q4} reports.
+The main takeaway from Table~\ref{tab:sweep} and Figure~\ref{fig:parcoord} is that dropping the sensitive layers from 8 bits to 4 bits always destroys the accuracy. And since those layers are so small, squeezing them barely saves any space anyway. Keeping the sensitive layers at 8 bits is the most important rule we found.
 
 %======================================================================
-\section{Compression Analysis}
+
+\section{Final Results}
+
 \label{sec:q4}
+
 %======================================================================
 
-Of the configurations we tried, we report the one that combines 4-bit
-quantization on the bulk of the weights with $50\%$ magnitude pruning, since it
-gave the best accuracy for its compression ratio among everything we measured
-(Table~\ref{tab:candidates}).
+After picking our best setups, we trained them for 20 more epochs (fine-tuning) to recover the lost accuracy. Table~\ref{tab:candidates} shows the final numbers.
 
 \begin{table}[ht]
 \centering
-\small
 \begin{tabular}{@{}lrr@{}}
 \toprule
-\textbf{Configuration} & \textbf{Accuracy} & \textbf{Model ratio} \\
+\textbf{Configuration} & \textbf{Accuracy} & \textbf{Space Saved} \\
 \midrule
-W4/A8 (no pruning)                & $94.97\%$ & $8.13\times$ \\
-Sensitivity-guided mixed precision & $93.74\%$ & $9.43\times$ \\
-W3/A8 (no pruning)                & $93.10\%$ & $9.91\times$ \\
-\textbf{W4/A8 + 50\% pruning (chosen)} & $\mathbf{93.23\%}$ & $\mathbf{10.74\times}$ \\
+4-bit (no pruning) & 94.97\% & $8.13\times$ \\
+Mixed bits (no pruning) & 93.74\% & $9.43\times$ \\
+3-bit (no pruning) & 93.10\% & $9.91\times$ \\
+\textbf{4-bit + 50\% pruning (chosen)} & \textbf{93.23\%} & \textbf{$10.74\times$} \\
 \bottomrule
 \end{tabular}
-\caption{Candidate configurations, all after fine-tuning. The chosen
-configuration reaches a higher compression ratio than uniform 3-bit weights
-while also being slightly more accurate.}
+\caption{Final accuracy after fine-tuning.}
 \label{tab:candidates}
 \end{table}
 
-The chosen configuration prunes $50\%$ of the pointwise-convolution weights
-(global magnitude threshold, capped at $95\%$ per layer), then quantizes the
-surviving weights to 4 bits (8 bits for the protected depthwise/stem/classifier
-layers, per-channel scales, MSE-optimal clipping), quantizes activations to 8
-bits, and fine-tunes for 20 epochs with the pruning mask held fixed. Without
-fine-tuning this configuration only reaches $50.06\%$; fine-tuning brings it to
-$93.23\%$.
+Our absolute best model uses \textbf{50\% pruning} on the big layers, combined with \textbf{4-bit weights}, \textbf{8-bit activations}, and \textbf{Huffman coding}:
 
-\paragraph{(a) Weight compression ratio.}
-$\mathbf{11.03\times}$. This measures the quantized-and-pruned weight storage
-against the original FP32 weight storage; it excludes the folded BatchNorm
-biases, which are reported separately in the size breakdown below.
+\begin{itemize}
 
-\paragraph{(b) Activation compression ratio.}
-$\mathbf{4.0\times}$ ($32$-bit down to $8$-bit). We measure this as the ratio of
-bits per activation element, applied to every tensor a quantizer is attached to
--- every \texttt{ReLU6} output and every inverted-residual block output, which
-together cover all of the activation tensors that flow between compute stages in
-the network. Activations are never written to disk; they are recomputed on every
-forward pass, so this ratio is reported separately from model size rather than
-folded into it.
+\item \textbf{(a) Weight Compression:} The weights take up $\mathbf{11.03\times}$ less space compared to the original model.
 
-\paragraph{(c) Accuracy at this compression ratio.}
-$\mathbf{93.23\%}$, against an uncompressed baseline of $96.34\%$ -- a $3.11$
-point drop for $10.74\times$ smaller storage. Before fine-tuning this
-configuration was at $50.06\%$; fine-tuning recovered $43.17$ points of that.
+\item \textbf{(b) Activation Compression:} The data moving between layers takes up $\mathbf{4.0\times}$ less space (shrunk from 32-bit floats to 8-bit integers).
 
-\paragraph{(d) Final model size.}
-$\mathbf{0.795}$ MB, down from $8.53$ MB in FP32. Table~\ref{tab:overhead-final}
-gives the full breakdown, computed analytically rather than by measuring a
-serialized file, since a raw file size would be shaped by \texttt{torch.save}'s
-pickling and dtype choices rather than by the storage format we actually
-designed.
+\item \textbf{(c) Accuracy:} It reached \textbf{93.23\%}. This means we only lost about 3.11\% accuracy compared to the original model, which is a great trade-off.
+
+\item \textbf{(d) Final Size:} The total file size is just $\mathbf{0.795\text{ MB}}$ ($\mathbf{813.6\text{ KB}}$), down from $8.53$~MB.
+
+\end{itemize}
 
 \begin{table}[ht]
 \centering
@@ -550,21 +291,16 @@ designed.
 \toprule
 \textbf{Component} & \textbf{Size (KB)} & \textbf{Share} \\
 \midrule
-Huffman-coded weight payload & $742.5$ & $91.3\%$ \\
-Per-channel scales (FP16)     & $33.3$  & $4.1\%$ \\
-Folded biases (FP16)          & $33.3$  & $4.1\%$ \\
-Huffman code tables           & $4.5$   & $0.5\%$ \\
+Main weights (Huffman) & 742.5 & 91.3\% \\
+Scales (FP16) & 33.3 & 4.1\% \\
+Biases (FP16) & 33.3 & 4.1\% \\
+Huffman dictionary & 4.5 & 0.5\% \\
 \midrule
-\textbf{Total}                 & $813.6$ & $100\%$ \\
+\textbf{Total Size} & \textbf{813.6} & \textbf{100.0\%} \\
 \bottomrule
 \end{tabular}
-\caption{Storage breakdown for the chosen configuration (W4/A8, 50\% pruned).}
+\caption{Final size breakdown of our best compressed model.}
 \label{tab:overhead-final}
 \end{table}
-
-%======================================================================
-\section{Repository}
-\noindent\url{https://github.com/Madhav1729/cs6886-a2-mobilenetv2-compression}
-
 
 \end{document}
