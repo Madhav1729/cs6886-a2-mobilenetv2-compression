@@ -1,0 +1,49 @@
+#!/bin/bash
+#PBS -N a2_hc
+#PBS -q gpuq
+#PBS -l select=1:ncpus=8:ngpus=1
+#PBS -l walltime=08:00:00
+#PBS -j oe
+#PBS -o logs/
+# directory target so re-submissions get separate log files; label with -N
+
+# Gradual pruning + distillation + QAT, targeting 15-20x compression.
+#   qsub -N hc_w3sp70 -v WBITS=3,SPARSITY=0.7,EPOCHS=40 jobs/highcompress.pbs   # ~15.7x
+#   qsub -N hc_w4sp80 -v WBITS=4,SPARSITY=0.8,EPOCHS=40 jobs/highcompress.pbs   # ~16.6x
+#   qsub -N hc_w3sp80 -v WBITS=3,SPARSITY=0.8,EPOCHS=50 jobs/highcompress.pbs   # ~18.1x
+#
+# Longer walltime than qat.pbs: gradual pruning needs the epochs to work.
+
+cd "${PBS_O_WORKDIR:-$PWD}" || exit 1
+source jobs/_env.sh
+
+WBITS="${WBITS:-3}"
+ABITS="${ABITS:-8}"
+SPARSITY="${SPARSITY:-0.7}"
+EPOCHS="${EPOCHS:-40}"
+LR="${LR:-5e-3}"
+BATCH="${BATCH:-128}"
+
+if [ ! -f checkpoints/baseline_last.pth ]; then
+    echo "[pbs] FATAL: checkpoints/baseline_last.pth missing"
+    exit 1
+fi
+
+echo "[pbs] config    : W${WBITS}/A${ABITS} sparsity=${SPARSITY} epochs=${EPOCHS} lr=${LR}"
+echo
+
+run_step "high-compression W${WBITS} sp${SPARSITY}" \
+    "$PYTHON" scripts/run_highcompress.py \
+        --checkpoint checkpoints/baseline_last.pth \
+        --weight-bits "$WBITS" \
+        --activation-bits "$ABITS" \
+        --sparsity "$SPARSITY" \
+        --epochs "$EPOCHS" \
+        --lr "$LR" \
+        --batch-size "$BATCH" \
+        --wandb
+status=$?
+
+echo "[pbs] checkpoints:"; ls -lh checkpoints/
+echo "[pbs] done  $(date)  (exit ${status})"
+exit $status
