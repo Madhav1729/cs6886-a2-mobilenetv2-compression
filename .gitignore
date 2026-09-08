@@ -1,0 +1,10 @@
+__pycache__/
+*.py[cod]
+data/
+checkpoints/*.pth
+runs/
+wandb/
+*.egg-info/
+.venv/
+logs/*
+!logs/.gitkeep

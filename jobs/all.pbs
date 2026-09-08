@@ -1,0 +1,36 @@
+#!/bin/bash
+#PBS -N a2_all
+#PBS -q gpuq
+#PBS -l select=1:ncpus=8:ngpus=1
+#PBS -l walltime=06:00:00
+#PBS -j oe
+#PBS -o logs/
+# directory target so re-submissions get separate log files; label with -N
+
+# Everything in dependency order, one allocation. Sweep runs first so it's
+# done even if the job hits walltime later. qsub jobs/all.pbs
+
+cd "${PBS_O_WORKDIR:-$PWD}"
+source jobs/_env.sh
+
+echo "########## 1/4  Q3(b) sweep  [REQUIRED] ##########"
+$PYTHON scripts/sweep_compression.py --checkpoint checkpoints/baseline_last.pth \
+    --weight-bits 8 6 4 3 --activation-bits 8 6 --wandb || echo "[pbs] sweep FAILED"
+
+echo; echo "########## 2/4  sensitivity profiles + allocation ##########"
+$PYTHON scripts/sensitivity.py --bits 3 --limit-eval 2000 --out sensitivity_3bit.json || true
+$PYTHON scripts/sensitivity.py --bits 2 --limit-eval 2000 --out sensitivity_2bit.json || true
+$PYTHON scripts/allocate_bits.py --profile sensitivity_3bit.json \
+    --profile2 sensitivity_2bit.json --target-bits 2.6 --out layer_bits.json || true
+
+echo; echo "########## 3/4  mixed-precision QAT ##########"
+$PYTHON scripts/run_qat.py --layer-bits layer_bits.json --activation-bits 8 \
+    --epochs 15 --lr 3e-3 --run-name qat-mixed --wandb || echo "[pbs] mixed QAT FAILED"
+
+echo; echo "########## 4/4  uniform 2-bit QAT (stretch) ##########"
+$PYTHON scripts/run_qat.py --weight-bits 2 --activation-bits 8 \
+    --epochs 15 --lr 5e-3 --run-name qat-w2a8 --wandb || echo "[pbs] 2-bit QAT FAILED"
+
+echo
+echo "[pbs] checkpoints:"; ls -lh checkpoints/
+echo "[pbs] done  $(date)"

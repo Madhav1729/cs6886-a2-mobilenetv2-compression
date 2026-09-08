@@ -1,0 +1,57 @@
+{
+  "per_class": {
+    "airplane": 97.6,
+    "automobile": 98.4,
+    "bird": 95.9,
+    "cat": 91.2,
+    "deer": 96.5,
+    "dog": 92.7,
+    "frog": 98.8,
+    "horse": 97.4,
+    "ship": 98.1,
+    "truck": 96.8
+  },
+  "confusions": [
+    {
+      "n": 48,
+      "true": "cat",
+      "pred": "dog"
+    },
+    {
+      "n": 40,
+      "true": "dog",
+      "pred": "cat"
+    },
+    {
+      "n": 24,
+      "true": "truck",
+      "pred": "automobile"
+    },
+    {
+      "n": 15,
+      "true": "dog",
+      "pred": "deer"
+    },
+    {
+      "n": 14,
+      "true": "automobile",
+      "pred": "truck"
+    },
+    {
+      "n": 12,
+      "true": "ship",
+      "pred": "airplane"
+    },
+    {
+      "n": 12,
+      "true": "cat",
+      "pred": "deer"
+    },
+    {
+      "n": 11,
+      "true": "horse",
+      "pred": "dog"
+    }
+  ],
+  "overall": 96.34
+}

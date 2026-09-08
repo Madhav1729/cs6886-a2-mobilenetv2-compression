@@ -1,0 +1,13 @@
+# Local dev (Python 3.13, CUDA 12.8)
+# torch==2.10.0
+# torchvision==0.25.0
+
+# AQUA cluster (GLIBC 2.17, CUDA 12.4) -- install with:
+#   pip install torch==2.6.0 torchvision==0.21.0 --index-url https://download.pytorch.org/whl/cu124
+#   pip install numpy matplotlib wandb tqdm
+torch==2.6.0
+torchvision==0.21.0
+numpy
+matplotlib
+wandb
+tqdm

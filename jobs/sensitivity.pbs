@@ -1,0 +1,46 @@
+#!/bin/bash
+#PBS -N a2_sens
+#PBS -q gpuq
+#PBS -l select=1:ncpus=8:ngpus=1
+#PBS -l walltime=01:30:00
+#PBS -j oe
+#PBS -o logs/
+# directory target so re-submissions get separate log files; label with -N
+
+# Per-layer sensitivity profiles + mixed-precision bit allocation.
+#   qsub jobs/sensitivity.pbs
+#   qsub -v TARGET_BITS=10,PROTECT=0.8 jobs/sensitivity.pbs   # protect-only
+
+cd "${PBS_O_WORKDIR:-$PWD}" || exit 1
+source jobs/_env.sh
+
+# protected layers -> HIGH bits, everything else -> MID, cheapest-to-damage
+# demoted to LOW until TARGET_BITS average is hit
+TARGET_BITS="${TARGET_BITS:-3.4}"
+PROTECT="${PROTECT:-0.5}"           # drop (points) above which a layer is protected
+HIGH="${HIGH:-8}"
+MID="${MID:-4}"
+LOW="${LOW:-3}"
+EVAL_N="${EVAL_N:-2000}"
+
+run_step "sensitivity profile @3-bit" \
+    "$PYTHON" scripts/sensitivity.py --bits 3 --limit-eval "$EVAL_N" \
+        --out sensitivity_3bit.json || exit $?
+
+run_step "sensitivity profile @2-bit" \
+    "$PYTHON" scripts/sensitivity.py --bits 2 --limit-eval "$EVAL_N" \
+        --out sensitivity_2bit.json || exit $?
+
+run_step "bit allocation (target ${TARGET_BITS} b/w; high=${HIGH} mid=${MID} low=${LOW}; protect >= ${PROTECT})" \
+    "$PYTHON" scripts/allocate_bits.py \
+        --profile sensitivity_3bit.json \
+        --profile2 sensitivity_2bit.json \
+        --protect-drop "$PROTECT" \
+        --high-bits "$HIGH" --mid-bits "$MID" --low-bits "$LOW" \
+        --target-bits "$TARGET_BITS" \
+        --out layer_bits.json
+status=$?
+
+echo "[pbs] next: qsub -v LAYER_BITS=layer_bits.json,EPOCHS=15,LR=3e-3 jobs/qat.pbs"
+echo "[pbs] done  $(date)  (exit ${status})"
+exit $status

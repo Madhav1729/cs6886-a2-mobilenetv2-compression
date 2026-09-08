@@ -1,0 +1,64 @@
+#!/bin/bash
+#PBS -N a2_qat
+#PBS -q gpuq
+#PBS -l select=1:ncpus=8:ngpus=1
+#PBS -l walltime=03:00:00
+#PBS -j oe
+#PBS -o logs/
+# directory target so re-submissions get separate log files; label with -N
+
+# QAT fine-tuning. Overridable at submit time:
+#   qsub jobs/qat.pbs                                          # W4/A8, 5 epochs
+#   qsub -v WBITS=3,EPOCHS=25,LR=3e-3 jobs/qat.pbs             # 3-bit
+#   qsub -v LAYER_BITS=layer_bits.json,EPOCHS=15 jobs/qat.pbs  # mixed allocation
+#   qsub -v SPARSITY=0.5,EPOCHS=20,LR=3e-3 jobs/qat.pbs        # 50% pruned
+
+cd "${PBS_O_WORKDIR:-$PWD}" || exit 1
+source jobs/_env.sh
+
+WBITS="${WBITS:-4}"
+ABITS="${ABITS:-8}"
+EPOCHS="${EPOCHS:-5}"
+LR="${LR:-1e-3}"
+BATCH="${BATCH:-128}"
+SPARSITY="${SPARSITY:-0}"
+RUN_NAME="${RUN_NAME:-qat-w${WBITS}a${ABITS}}"
+
+EXTRA=()
+if [ -n "${LAYER_BITS:-}" ]; then
+    if [ ! -f "$LAYER_BITS" ]; then
+        echo "[pbs] FATAL: LAYER_BITS file not found: $LAYER_BITS"
+        echo "[pbs] run 'qsub jobs/sensitivity.pbs' first to produce it"
+        exit 1
+    fi
+    EXTRA+=(--layer-bits "$LAYER_BITS")
+    RUN_NAME="${RUN_NAME}-mixed"
+fi
+
+if [ ! -f checkpoints/baseline_last.pth ]; then
+    echo "[pbs] FATAL: checkpoints/baseline_last.pth missing -- train the baseline first"
+    exit 1
+fi
+
+echo "[pbs] config    : W${WBITS}/A${ABITS} sparsity=${SPARSITY} epochs=${EPOCHS} lr=${LR} batch=${BATCH}"
+echo "[pbs] run name  : ${RUN_NAME}"
+echo "[pbs] extra     : ${EXTRA[*]:-none}"
+echo
+
+run_step "QAT ${RUN_NAME}" \
+    "$PYTHON" scripts/run_qat.py \
+        --checkpoint checkpoints/baseline_last.pth \
+        --weight-bits "$WBITS" \
+        --activation-bits "$ABITS" \
+        --epochs "$EPOCHS" \
+        --lr "$LR" \
+        --batch-size "$BATCH" \
+        --sparsity "$SPARSITY" \
+        --run-name "$RUN_NAME" \
+        "${EXTRA[@]+"${EXTRA[@]}"}" \
+        --wandb
+status=$?
+
+echo "[pbs] checkpoints:"; ls -lh checkpoints/
+echo "[pbs] done  $(date)  (exit ${status})"
+exit $status

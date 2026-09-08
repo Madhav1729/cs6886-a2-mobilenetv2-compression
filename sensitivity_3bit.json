@@ -1,0 +1,378 @@
+{
+  "reference_acc": 96.35,
+  "probe_bits": 3,
+  "total_params": 2202560,
+  "layers": [
+    {
+      "layer": "features.1.conv.0.0.weight",
+      "kind": "depthwise",
+      "params": 288,
+      "acc": 45.55,
+      "drop": 50.8
+    },
+    {
+      "layer": "features.3.conv.1.0.weight",
+      "kind": "depthwise",
+      "params": 1296,
+      "acc": 94.25,
+      "drop": 2.0999999999999943
+    },
+    {
+      "layer": "features.14.conv.2.weight",
+      "kind": "pointwise",
+      "params": 92160,
+      "acc": 94.25,
+      "drop": 2.0999999999999943
+    },
+    {
+      "layer": "features.4.conv.2.weight",
+      "kind": "pointwise",
+      "params": 4608,
+      "acc": 94.45,
+      "drop": 1.8999999999999915
+    },
+    {
+      "layer": "features.1.conv.1.weight",
+      "kind": "pointwise",
+      "params": 512,
+      "acc": 94.75,
+      "drop": 1.5999999999999943
+    },
+    {
+      "layer": "features.11.conv.1.0.weight",
+      "kind": "depthwise",
+      "params": 3456,
+      "acc": 95.6,
+      "drop": 0.75
+    },
+    {
+      "layer": "features.5.conv.1.0.weight",
+      "kind": "depthwise",
+      "params": 1728,
+      "acc": 95.65,
+      "drop": 0.6999999999999886
+    },
+    {
+      "layer": "features.11.conv.2.weight",
+      "kind": "pointwise",
+      "params": 36864,
+      "acc": 95.65,
+      "drop": 0.6999999999999886
+    },
+    {
+      "layer": "features.2.conv.1.0.weight",
+      "kind": "depthwise",
+      "params": 864,
+      "acc": 95.7,
+      "drop": 0.6499999999999915
+    },
+    {
+      "layer": "features.7.conv.2.weight",
+      "kind": "pointwise",
+      "params": 12288,
+      "acc": 95.7,
+      "drop": 0.6499999999999915
+    },
+    {
+      "layer": "features.13.conv.2.weight",
+      "kind": "pointwise",
+      "params": 55296,
+      "acc": 95.7,
+      "drop": 0.6499999999999915
+    },
+    {
+      "layer": "features.0.0.weight",
+      "kind": "first",
+      "params": 864,
+      "acc": 95.75,
+      "drop": 0.5999999999999943
+    },
+    {
+      "layer": "features.3.conv.2.weight",
+      "kind": "pointwise",
+      "params": 3456,
+      "acc": 95.85,
+      "drop": 0.5
+    },
+    {
+      "layer": "features.8.conv.1.0.weight",
+      "kind": "depthwise",
+      "params": 3456,
+      "acc": 95.9,
+      "drop": 0.44999999999998863
+    },
+    {
+      "layer": "features.12.conv.1.0.weight",
+      "kind": "depthwise",
+      "params": 5184,
+      "acc": 95.9,
+      "drop": 0.44999999999998863
+    },
+    {
+      "layer": "features.10.conv.2.weight",
+      "kind": "pointwise",
+      "params": 24576,
+      "acc": 95.95,
+      "drop": 0.3999999999999915
+    },
+    {
+      "layer": "features.4.conv.0.0.weight",
+      "kind": "pointwise",
+      "params": 3456,
+      "acc": 96.0,
+      "drop": 0.3499999999999943
+    },
+    {
+      "layer": "features.6.conv.1.0.weight",
+      "kind": "depthwise",
+      "params": 1728,
+      "acc": 96.0,
+      "drop": 0.3499999999999943
+    },
+    {
+      "layer": "features.5.conv.2.weight",
+      "kind": "pointwise",
+      "params": 6144,
+      "acc": 96.05,
+      "drop": 0.29999999999999716
+    },
+    {
+      "layer": "features.2.conv.2.weight",
+      "kind": "pointwise",
+      "params": 2304,
+      "acc": 96.1,
+      "drop": 0.25
+    },
+    {
+      "layer": "features.12.conv.2.weight",
+      "kind": "pointwise",
+      "params": 55296,
+      "acc": 96.1,
+      "drop": 0.25
+    },
+    {
+      "layer": "features.17.conv.2.weight",
+      "kind": "pointwise",
+      "params": 307200,
+      "acc": 96.1,
+      "drop": 0.25
+    },
+    {
+      "layer": "features.6.conv.2.weight",
+      "kind": "pointwise",
+      "params": 6144,
+      "acc": 96.15,
+      "drop": 0.19999999999998863
+    },
+    {
+      "layer": "features.7.conv.0.0.weight",
+      "kind": "pointwise",
+      "params": 6144,
+      "acc": 96.15,
+      "drop": 0.19999999999998863
+    },
+    {
+      "layer": "features.9.conv.2.weight",
+      "kind": "pointwise",
+      "params": 24576,
+      "acc": 96.15,
+      "drop": 0.19999999999998863
+    },
+    {
+      "layer": "features.15.conv.2.weight",
+      "kind": "pointwise",
+      "params": 153600,
+      "acc": 96.15,
+      "drop": 0.19999999999998863
+    },
+    {
+      "layer": "features.5.conv.0.0.weight",
+      "kind": "pointwise",
+      "params": 6144,
+      "acc": 96.2,
+      "drop": 0.14999999999999147
+    },
+    {
+      "layer": "features.14.conv.0.0.weight",
+      "kind": "pointwise",
+      "params": 55296,
+      "acc": 96.2,
+      "drop": 0.14999999999999147
+    },
+    {
+      "layer": "features.8.conv.0.0.weight",
+      "kind": "pointwise",
+      "params": 24576,
+      "acc": 96.25,
+      "drop": 0.09999999999999432
+    },
+    {
+      "layer": "features.8.conv.2.weight",
+      "kind": "pointwise",
+      "params": 24576,
+      "acc": 96.25,
+      "drop": 0.09999999999999432
+    },
+    {
+      "layer": "features.12.conv.0.0.weight",
+      "kind": "pointwise",
+      "params": 55296,
+      "acc": 96.25,
+      "drop": 0.09999999999999432
+    },
+    {
+      "layer": "features.16.conv.0.0.weight",
+      "kind": "pointwise",
+      "params": 153600,
+      "acc": 96.25,
+      "drop": 0.09999999999999432
+    },
+    {
+      "layer": "features.7.conv.1.0.weight",
+      "kind": "depthwise",
+      "params": 1728,
+      "acc": 96.3,
+      "drop": 0.04999999999999716
+    },
+    {
+      "layer": "features.13.conv.0.0.weight",
+      "kind": "pointwise",
+      "params": 55296,
+      "acc": 96.3,
+      "drop": 0.04999999999999716
+    },
+    {
+      "layer": "features.15.conv.1.0.weight",
+      "kind": "depthwise",
+      "params": 8640,
+      "acc": 96.3,
+      "drop": 0.04999999999999716
+    },
+    {
+      "layer": "features.16.conv.1.0.weight",
+      "kind": "depthwise",
+      "params": 8640,
+      "acc": 96.3,
+      "drop": 0.04999999999999716
+    },
+    {
+      "layer": "features.9.conv.0.0.weight",
+      "kind": "pointwise",
+      "params": 24576,
+      "acc": 96.35,
+      "drop": 0.0
+    },
+    {
+      "layer": "features.14.conv.1.0.weight",
+      "kind": "depthwise",
+      "params": 5184,
+      "acc": 96.35,
+      "drop": 0.0
+    },
+    {
+      "layer": "features.15.conv.0.0.weight",
+      "kind": "pointwise",
+      "params": 153600,
+      "acc": 96.35,
+      "drop": 0.0
+    },
+    {
+      "layer": "features.17.conv.1.0.weight",
+      "kind": "depthwise",
+      "params": 8640,
+      "acc": 96.35,
+      "drop": 0.0
+    },
+    {
+      "layer": "features.18.0.weight",
+      "kind": "pointwise",
+      "params": 409600,
+      "acc": 96.35,
+      "drop": 0.0
+    },
+    {
+      "layer": "classifier.1.weight",
+      "kind": "classifier",
+      "params": 12800,
+      "acc": 96.35,
+      "drop": 0.0
+    },
+    {
+      "layer": "features.2.conv.0.0.weight",
+      "kind": "pointwise",
+      "params": 1536,
+      "acc": 96.4,
+      "drop": -0.05000000000001137
+    },
+    {
+      "layer": "features.4.conv.1.0.weight",
+      "kind": "depthwise",
+      "params": 1296,
+      "acc": 96.4,
+      "drop": -0.05000000000001137
+    },
+    {
+      "layer": "features.10.conv.1.0.weight",
+      "kind": "depthwise",
+      "params": 3456,
+      "acc": 96.4,
+      "drop": -0.05000000000001137
+    },
+    {
+      "layer": "features.13.conv.1.0.weight",
+      "kind": "depthwise",
+      "params": 5184,
+      "acc": 96.4,
+      "drop": -0.05000000000001137
+    },
+    {
+      "layer": "features.16.conv.2.weight",
+      "kind": "pointwise",
+      "params": 153600,
+      "acc": 96.4,
+      "drop": -0.05000000000001137
+    },
+    {
+      "layer": "features.3.conv.0.0.weight",
+      "kind": "pointwise",
+      "params": 3456,
+      "acc": 96.45,
+      "drop": -0.10000000000000853
+    },
+    {
+      "layer": "features.9.conv.1.0.weight",
+      "kind": "depthwise",
+      "params": 3456,
+      "acc": 96.45,
+      "drop": -0.10000000000000853
+    },
+    {
+      "layer": "features.6.conv.0.0.weight",
+      "kind": "pointwise",
+      "params": 6144,
+      "acc": 96.5,
+      "drop": -0.15000000000000568
+    },
+    {
+      "layer": "features.11.conv.0.0.weight",
+      "kind": "pointwise",
+      "params": 24576,
+      "acc": 96.5,
+      "drop": -0.15000000000000568
+    },
+    {
+      "layer": "features.17.conv.0.0.weight",
+      "kind": "pointwise",
+      "params": 153600,
+      "acc": 96.5,
+      "drop": -0.15000000000000568
+    },
+    {
+      "layer": "features.10.conv.0.0.weight",
+      "kind": "pointwise",
+      "params": 24576,
+      "acc": 96.55,
+      "drop": -0.20000000000000284
+    }
+  ]
+}

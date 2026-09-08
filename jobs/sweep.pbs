@@ -1,0 +1,28 @@
+#!/bin/bash
+#PBS -N a2_sweep
+#PBS -q gpuq
+#PBS -l select=1:ncpus=8:ngpus=1
+#PBS -l walltime=01:00:00
+#PBS -j oe
+#PBS -o logs/
+# directory target so re-submissions get separate log files; label with -N
+
+# Q3 sweep: bit-width x sparsity, inference only. qsub jobs/sweep.pbs
+
+cd "${PBS_O_WORKDIR:-$PWD}" || exit 1
+source jobs/_env.sh
+
+run_step "Q3 sweep (4 x 2 x 2 x 2 = 32 configs)" \
+    "$PYTHON" scripts/sweep_compression.py \
+        --checkpoint checkpoints/baseline_last.pth \
+        --weight-bits 8 6 4 3 \
+        --activation-bits 8 6 \
+        --sensitive-bits 8 4 \
+        --sparsity 0 0.5 \
+        --wandb
+status=$?
+
+echo "[pbs] Build the chart: wandb project cs6886-a2-mobilenetv2 -> Runs ->"
+echo "[pbs]   filter group=q3-compression-sweep -> '+' -> Parallel Coordinates"
+echo "[pbs] done  $(date)  (exit ${status})"
+exit $status
