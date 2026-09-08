@@ -75,4 +75,4 @@ report/         report.tex / report.pdf
 
 ## Repository
 
-_(add GitHub link for Q5c)_
+https://github.com/Madhav1729/cs6886-a2-mobilenetv2-compression
