@@ -73,6 +73,4 @@ jobs/           PBS scripts for the above
 report/         report.tex / report.pdf
 ```
 
-## Repository
 
-https://github.com/Madhav1729/cs6886-a2-mobilenetv2-compression
